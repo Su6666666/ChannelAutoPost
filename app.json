@@ -8,9 +8,9 @@
         "telegram-bot",
         "botzhub"
     ],
-    "repository": "https://github.com/xditya/ChannelAutoPost",
-    "website": "xditya.me",
-    "success_url": "https://t.me/BotzHub",
+    "repository": "https://t.me/SGBACKUP",
+    "website": "https://t.me/SGBACKUP",
+    "success_url": "https://t.me/SGBACKUP",
     "env": {
         "BOT_TOKEN": {
             "description": "Bot token, get it from @BotFather.",
