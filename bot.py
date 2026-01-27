@@ -1,73 +1,94 @@
+#    This file is part of the ChannelAutoForwarder distribution (https://github.com/xditya/ChannelAutoForwarder).
+#    Copyright (c) 2021-2022 Aditya
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, version 3.
+#
+#    This program is distributed in the hope that it will be useful, but
+#    WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+#    General Public License for more details.
+#
+#    License can be found in < https://github.com/xditya/ChannelAutoForwarder/blob/main/License> .
+
 import logging
-import asyncio
-import re
 from telethon import TelegramClient, events, Button
 from decouple import config
-from database import Database
 
-# লগিং কনফিগারেশন
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="[%(levelname)s] %(asctime)s - %(message)s"
+)
 log = logging.getLogger("ChannelAutoPost")
 
+# start the bot
+log.info("Starting...")
 try:
-    API_ID = config("APP_ID", cast=int)
-    API_HASH = config("API_HASH")
-    BOT_TOKEN = config("BOT_TOKEN")
-    MONGO_URI = config("MONGO_URI")
-    ADMIN_ID = config("ADMIN_ID", cast=int)
-    
-    bot = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
-    db = Database(MONGO_URI)
-except Exception as e:
-    log.error(f"Error: {e}")
+    apiid = config("APP_ID", cast=int)
+    apihash = config("API_HASH")
+    bottoken = config("BOT_TOKEN")
+    frm = config("FROM_CHANNEL", cast=lambda x: [int(_) for _ in x.split(" ")])
+    tochnls = config("TO_CHANNEL", cast=lambda x: [int(_) for _ in x.split(" ")])
+    datgbot = TelegramClient(None, apiid, apihash).start(bot_token=bottoken)
+except Exception as exc:
+    log.error("Environment vars are missing! Kindly recheck.")
+    log.info("Bot is quiting...")
+    log.error(exc)
     exit()
 
-# ১. লিংক ও ইউজারনেম ক্লিনার (Regex)
-def clean_text(text):
-    if not text: return ""
-    # সব ধরণের URL এবং @username মুছে ফেলা হবে
-    text = re.sub(r'http\S+|www\S+|t\.me\/\S+|@\w+', '', text)
-    return text.strip()
 
-# ২. সিকুয়েন্স মেইনটেইনার (Queue)
-post_queue = asyncio.Queue()
+@datgbot.on(events.NewMessage(pattern="/start"))
+async def _(event):
+    await event.reply(
+        f"Hi `{event.sender.first_name}`!\n\nI am a channel auto-post bot!! Read /help to know more!\n\nI can be used in only two channels (one user) at a time. Kindly deploy your own bot.\n\n[More bots](https://t.me/SGBACKUP)..",
+        buttons=[
+            Button.url("Repo", url="https://t.me/SGBACKUP"),
+            Button.url("Dev", url="https://t.me/SGBACKUP"),
+        ],
+        link_preview=False,
+    )
 
-async def worker():
-    while True:
-        source_id, event, dest_id = await post_queue.get()
+
+@datgbot.on(events.NewMessage(pattern="/help"))
+async def helpp(event):
+    await event.reply(
+        "**Help**\n\nThis bot will send all new posts in one channel to the other channel. (without forwarded tag)!\nIt can be used only in two channels at a time, so kindly deploy your own bot from [here](https://t.me/SGBACKUP).\n\nAdd me to both the channels and make me an admin in both, and all new messages would be autoposted on the linked channel!!\n\nLiked the bot? Drop a ♥ to @SGBACKUP :)"
+    )
+
+
+@datgbot.on(events.NewMessage(incoming=True, chats=frm))
+async def _(event):
+    for tochnl in tochnls:
         try:
-            caption = clean_text(event.text)
-            # মিলিসেকেন্ড ডিলে সহ পোস্ট করা
-            if event.media:
-                await bot.send_file(dest_id, event.media, caption=caption)
+            if event.poll:
+                return
+            if event.photo:
+                photo = event.media.photo
+                await datgbot.send_file(
+                    tochnl, photo, caption=event.text, link_preview=False
+                )
+            elif event.media:
+                try:
+                    if event.media.webpage:
+                        await datgbot.send_message(
+                            tochnl, event.text, link_preview=False
+                        )
+                except Exception:
+                    media = event.media.document
+                    await datgbot.send_file(
+                        tochnl, media, caption=event.text, link_preview=False
+                    )
+                finally:
+                    return
             else:
-                await bot.send_message(dest_id, caption)
-            await asyncio.sleep(0.5) # ৫০০ মিলিসেকেন্ড গ্যাপ
-        except Exception as e:
-            log.error(f"Post Error: {e}")
-        finally:
-            post_queue.task_done()
+                await datgbot.send_message(tochnl, event.text, link_preview=False)
+        except Exception as exc:
+            log.error(
+                "TO_CHANNEL ID is wrong or I can't send messages there (make me admin).\nTraceback:\n%s",
+                exc,
+            )
 
-# ৩. কমান্ড হ্যান্ডলার (In-Bot Control)
-@bot.on(events.NewMessage(pattern="/add", from_users=ADMIN_ID))
-async def add_map(event):
-    args = event.text.split()
-    if len(args) == 3:
-        await db.add_mapping(int(args[1]), int(args[2]))
-        await event.reply("✅ Mapping Added! Now I will forward from source to dest.")
-    else:
-        await event.reply("❌ Use: `/add [Source_ID] [Dest_ID]`")
 
-@bot.on(events.NewMessage(incoming=True))
-async def handle_posts(event):
-    if event.is_channel:
-        dest_id = await db.get_mapping(event.chat_id)
-        if dest_id:
-            await post_queue.put((event.chat_id, event, dest_id))
-
-async def run_bot():
-    asyncio.create_task(worker())
-    await bot.run_until_disconnected()
-
-if __name__ == "__main__":
-    bot.loop.run_until_complete(run_bot())
+log.info("Bot has started.")
+log.info("Do visit https://t.me/SGBACKUP !")
+datgbot.run_until_disconnected()
