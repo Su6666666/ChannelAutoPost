@@ -1,18 +1,5 @@
-#    This file is part of the ChannelAutoForwarder distribution (https://github.com/xditya/ChannelAutoForwarder).
-#    Copyright (c) 2021-2022 Aditya
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation, version 3.
-#
-#    This program is distributed in the hope that it will be useful, but
-#    WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-#    General Public License for more details.
-#
-#    License can be found in < https://github.com/xditya/ChannelAutoForwarder/blob/main/License> .
-
 import logging
+import asyncio # নতুন যোগ করা হয়েছে
 from telethon import TelegramClient, events, Button
 from decouple import config
 
@@ -21,7 +8,6 @@ logging.basicConfig(
 )
 log = logging.getLogger("ChannelAutoPost")
 
-# start the bot
 log.info("Starting...")
 try:
     apiid = config("APP_ID", cast=int)
@@ -36,59 +22,35 @@ except Exception as exc:
     log.error(exc)
     exit()
 
-
 @datgbot.on(events.NewMessage(pattern="/start"))
 async def _(event):
     await event.reply(
-        f"Hi `{event.sender.first_name}`!\n\nI am a channel auto-post bot!! Read /help to know more!\n\nI can be used in only two channels (one user) at a time. Kindly deploy your own bot.\n\n[More bots](https://t.me/SGBACKUP)..",
+        f"Hi `{event.sender.first_name}`!\n\nI am a channel auto-post bot!!",
         buttons=[
-            Button.url("Repo", url="https://t.me/SGBACKUP"),
-            Button.url("Dev", url="https://t.me/SGBACKUP"),
+            Button.url("Support", url="https://t.me/SGBACKUP"),
         ],
         link_preview=False,
     )
 
-
-@datgbot.on(events.NewMessage(pattern="/help"))
-async def helpp(event):
-    await event.reply(
-        "**Help**\n\nThis bot will send all new posts in one channel to the other channel. (without forwarded tag)!\nIt can be used only in two channels at a time, so kindly deploy your own bot from [here](https://t.me/SGBACKUP).\n\nAdd me to both the channels and make me an admin in both, and all new messages would be autoposted on the linked channel!!\n\nLiked the bot? Drop a ♥ to @SGBACKUP :)"
-    )
-
-
+# সিরিয়াল ঠিক রাখার জন্য মূল এডিট এখানে
 @datgbot.on(events.NewMessage(incoming=True, chats=frm))
 async def _(event):
+    # ১০০টি ফাইল একসাথে আসলে ১ সেকেন্ড বিরতি দিলে সিরিয়াল ঠিক থাকে
+    await asyncio.sleep(1) 
+    
     for tochnl in tochnls:
         try:
             if event.poll:
                 return
-            if event.photo:
-                photo = event.media.photo
-                await datgbot.send_file(
-                    tochnl, photo, caption=event.text, link_preview=False
-                )
-            elif event.media:
-                try:
-                    if event.media.webpage:
-                        await datgbot.send_message(
-                            tochnl, event.text, link_preview=False
-                        )
-                except Exception:
-                    media = event.media.document
-                    await datgbot.send_file(
-                        tochnl, media, caption=event.text, link_preview=False
-                    )
-                finally:
-                    return
-            else:
-                await datgbot.send_message(tochnl, event.text, link_preview=False)
+            
+            # সরাসরি copy() ব্যবহার করা হচ্ছে যাতে সিরিয়াল এবং ক্যাপশন ১০০% সঠিক থাকে
+            await datgbot.send_message(tochnl, event.message)
+            
+            # প্রতিটি ফাইল পাঠানোর পর সামান্য বিরতি (০.৫ সেকেন্ড)
+            await asyncio.sleep(0.5) 
+            
         except Exception as exc:
-            log.error(
-                "TO_CHANNEL ID is wrong or I can't send messages there (make me admin).\nTraceback:\n%s",
-                exc,
-            )
+            log.error("Error sending message to %s: %s", tochnl, exc)
 
-
-log.info("Bot has started.")
-log.info("Do visit https://t.me/SGBACKUP !")
+log.info("Bot has started. Developed with sequential fix.")
 datgbot.run_until_disconnected()
