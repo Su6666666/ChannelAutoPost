@@ -50,15 +50,21 @@ async def _(event):
                 if event.poll:
                     return
                 
-                # হুবহু মেসেজটি কপি করে পাঠানো
-                await datgbot.send_message(tochnl, event.message)
+                # ফাইলের আসল নাম খুঁজে বের করা
+                file_name = event.file.name if event.file else None
+                
+                if file_name:
+                    # যদি ফাইল থাকে, তবে সোর্স ক্যাপশন বাদ দিয়ে অরিজিনাল ফাইল নেম ক্যাপশন হিসেবে যাবে
+                    await datgbot.send_file(tochnl, event.message.media, caption=file_name)
+                else:
+                    # যদি শুধু টেক্সট মেসেজ হয়, তবে যা আছে তাই কপি হবে
+                    await datgbot.send_message(tochnl, event.message)
                 
                 # ১.৫ সেকেন্ড বিরতি (টেলিগ্রামের ফ্লাড লিমিট এবং সিরিয়াল ঠিক রাখতে এটিই সেরা)
                 await asyncio.sleep(1.5) 
                 
             except Exception as exc:
                 log.error(f"Error sending to {tochnl}: {exc}")
-                # যদি টেলিগ্রাম থেকে 'Flood Wait' এরর দেয়, তবে এটি বটকে কিছুক্ষণ থামিয়ে রাখবে
                 if "flood" in str(exc).lower():
                     await asyncio.sleep(20)
 
