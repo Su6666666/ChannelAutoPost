@@ -45,31 +45,40 @@ async def _(event):
         if is_processed:
             return
 
-        for tochnl in tochnls:
-            try:
-                if event.poll:
-                    return
-                
-                # ফাইলের আসল নাম খুঁজে বের করা
-                file_name = event.file.name if event.file else None
-                
-                if file_name:
-                    # যদি ফাইল থাকে, তবে সোর্স ক্যাপশন বাদ দিয়ে অরিজিনাল ফাইল নেম ক্যাপশন হিসেবে যাবে
-                    await datgbot.send_file(tochnl, event.message.media, caption=file_name)
-                else:
-                    # যদি শুধু টেক্সট মেসেজ হয়, তবে যা আছে তাই কপি হবে
-                    await datgbot.send_message(tochnl, event.message)
-                
-                # ১.৫ সেকেন্ড বিরতি (টেলিগ্রামের ফ্লাড লিমিট এবং সিরিয়াল ঠিক রাখতে এটিই সেরা)
-                await asyncio.sleep(1.5) 
-                
-            except Exception as exc:
-                log.error(f"Error sending to {tochnl}: {exc}")
-                if "flood" in str(exc).lower():
-                    await asyncio.sleep(20)
+        # ১:১ ম্যাপিং লজিক যোগ করা হয়েছে
+        try:
+            # সোর্স চ্যানেলের ইনডেক্স খুঁজে বের করা (যেমন: ১ নম্বর না ২ নম্বর)
+            source_index = frm.index(event.chat_id)
+            # সেই ইনডেক্স অনুযায়ী টার্গেট চ্যানেল সেট করা
+            target_channel = tochnls[source_index]
+        except (ValueError, IndexError):
+            # যদি ম্যাপিং না পাওয়া যায় তবে প্রসেস হবে না
+            return
+
+        try:
+            if event.poll:
+                return
+            
+            # ফাইলের আসল নাম খুঁজে বের করা
+            file_name = event.file.name if event.file else None
+            
+            if file_name:
+                # যদি ফাইল থাকে, তবে অরিজিনাল ফাইল নেম ক্যাপশন হিসেবে যাবে
+                await datgbot.send_file(target_channel, event.message.media, caption=file_name)
+            else:
+                # যদি শুধু টেক্সট মেসেজ হয়, তবে যা আছে তাই কপি হবে
+                await datgbot.send_message(target_channel, event.message)
+            
+            # ১.৫ সেকেন্ড বিরতি (সিরিয়াল ঠিক রাখতে)
+            await asyncio.sleep(1.5) 
+            
+        except Exception as exc:
+            log.error(f"Error sending to {target_channel}: {exc}")
+            if "flood" in str(exc).lower():
+                await asyncio.sleep(20)
 
         # মেসেজটি সফলভাবে পাঠানো হলে ডাটাবেসে সেভ করা
         await collection.insert_one({"msg_id": event.id, "chat_id": event.chat_id})
 
-log.info("Bot has started with MongoDB Queue Logic.")
+log.info("Bot has started with MongoDB Queue Logic and Mapping.")
 datgbot.run_until_disconnected()
