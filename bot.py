@@ -18,7 +18,7 @@ try:
     tochnls = config("TO_CHANNEL", cast=lambda x: [int(_) for _ in x.split(" ")])
     
     # আপনার দেওয়া MongoDB URI
-    MONGO_URI = "mongodb+srv://SGBACKUP:SGBACKUP@cluster0.64jkmog.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    MONGO_URI = "mongodb+srv://SGBACKUP:SGBACKUP@cluster0.qwvxwgs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
     
     db_client = AsyncIOMotorClient(MONGO_URI)
     db = db_client.channel_bot
